@@ -5,10 +5,7 @@ use std::path::Path;
 #[tokio::main]
 async fn main() {
     let client = ClientBuilder::new()
-        .add_file(
-            uri!("hmny-wrap/test-wrap"),
-            Path::new("../assets/test-wrap"),
-        )
+        .add_file(uri!("hmny-wrap/test-wrap"), Path::new("./assets/test-wrap"))
         .add_closure(
             uri!("hmny-core/test-wrap"),
             ClosureWrap::new().add_method("sampleMethod", |args: &ArgsSampleMethod| {
@@ -18,7 +15,8 @@ async fn main() {
             }),
         )
         .load()
-        .await;
+        .await
+        .expect("failed to load wraps");
 
     let handles = vec![
         tokio::spawn(invoke_wasm(

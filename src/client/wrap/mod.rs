@@ -1,5 +1,3 @@
-use tokio::sync::Mutex;
-
 mod closure;
 pub use closure::*;
 mod instance;
@@ -8,6 +6,6 @@ mod loaded;
 pub use loaded::*;
 
 pub enum Wrap {
-    Loaded(Mutex<LoadedWrap>),
+    Loaded(LoadedWrap),
     Closure(ClosureWrap),
 }

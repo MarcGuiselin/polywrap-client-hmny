@@ -3,7 +3,6 @@ use polywrap_msgpack_serde::{from_slice, to_vec};
 pub use polywrap_uri::Uri;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use tokio::sync::Mutex;
 
 mod error;
 pub use error::*;
@@ -35,7 +34,10 @@ impl Client {
         args: Input,
     ) -> Result<Output, InvokeError> {
         let args = to_vec(&args).map_err(InvokeError::MsgpackSerialize)?;
-        let result = self.invoke_raw(uri, method, &args).await?;
+        let result = self.invoke_raw(uri, method, args).await?;
+
+        println!("result: {:?}", result);
+
         let result = from_slice(&result).map_err(InvokeError::MsgpackDeserialize)?;
 
         Ok(result)
@@ -45,7 +47,7 @@ impl Client {
         &self,
         uri: &Uri,
         method: &str,
-        args: &[u8],
+        args: Vec<u8>,
     ) -> Result<Vec<u8>, InvokeError> {
         let wrap = self
             .inner
@@ -56,22 +58,20 @@ impl Client {
         let result = match wrap {
             Wrap::Loaded(loaded_wrap) => {
                 // Get an instance from the cache, or create a new one if none are available.
-                let mut loaded_wrap_locked = loaded_wrap.lock().await;
-                let mut instance = loaded_wrap_locked
+                let mut instance = loaded_wrap
                     .cached_instances
+                    .lock()
+                    .await
                     .pop()
-                    .unwrap_or_else(|| WrapInstance::new());
-                let execution_context = loaded_wrap_locked.execution_context.clone();
-
-                // The lock should be dropped here so other threads can use other WrapInstances while this one is invoking.
-                drop(loaded_wrap_locked);
+                    .unwrap_or_else(|| WrapInstance::new(loaded_wrap));
 
                 // Invoke the method on the instance.
-                let result = instance.invoke(method, &args, &execution_context).await?;
+                let result = instance
+                    .invoke(method, args, &loaded_wrap.execution_context)
+                    .await?;
 
                 // Put the instance back in the cache.
-                let mut loaded_wrap_locked = loaded_wrap.lock().await;
-                loaded_wrap_locked.cached_instances.push(instance);
+                loaded_wrap.cached_instances.lock().await.push(instance);
 
                 result
             }
@@ -110,25 +110,20 @@ impl ClientBuilder {
         self
     }
 
-    pub async fn load(self) -> Client {
-        // TODO: Loading logic
+    pub async fn load(self) -> Result<Client, LoadError> {
+        let mut loaded_wraps = HashMap::new();
 
-        Client {
-            inner: Arc::new(ClientInner {
-                loaded_wraps: self
-                    .wraps_to_load
-                    .into_iter()
-                    .map(|(uri, load_wrap_request)| {
-                        let wrap = match load_wrap_request {
-                            LoadWrapRequest::Fs(path) => {
-                                Wrap::Loaded(Mutex::new(LoadedWrap::new_from_local(&path)))
-                            }
-                            LoadWrapRequest::Closure(closure_wrap) => Wrap::Closure(closure_wrap),
-                        };
-                        (uri, wrap)
-                    })
-                    .collect(),
-            }),
+        // TODO: load all wraps in parallel
+        for (uri, load_wrap_request) in self.wraps_to_load {
+            let wrap = match load_wrap_request {
+                LoadWrapRequest::Fs(path) => Wrap::Loaded(LoadedWrap::new_from_file(path).await?),
+                LoadWrapRequest::Closure(closure_wrap) => Wrap::Closure(closure_wrap),
+            };
+            loaded_wraps.insert(uri, wrap);
         }
+
+        Ok(Client {
+            inner: Arc::new(ClientInner { loaded_wraps }),
+        })
     }
 }

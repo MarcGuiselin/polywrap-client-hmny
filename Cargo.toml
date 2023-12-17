@@ -11,3 +11,4 @@ polywrap_msgpack_serde = "0.0.2"
 polywrap_uri = "0.1.10"
 serde = {version = "1.0.193", features = ["derive"]}
 tokio = {version = "1.35.0", features = ["full"]}
+wasmer = {version = "4.2.4"}
