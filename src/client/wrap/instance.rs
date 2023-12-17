@@ -17,7 +17,7 @@ impl WrapInstance {
     pub async fn invoke(
         &mut self,
         _method: &str,
-        _args: Vec<u8>,
+        _args: &[u8],
         _execution_context: &ExecutionContext,
     ) -> Result<Vec<u8>, InvokeError> {
         self.last_used = Instant::now();

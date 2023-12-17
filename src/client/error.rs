@@ -5,6 +5,7 @@ pub enum InvokeError {
     // WrapError(WrapError),
     // DecodeFailed(String),
     // EncodeFailed(String),
+    MethodNotFound,
     MsgpackSerialize(polywrap_msgpack_serde::Error),
     MsgpackDeserialize(polywrap_msgpack_serde::Error),
     WrapNotLoaded,
